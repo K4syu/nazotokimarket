@@ -12,7 +12,29 @@ npm.cmd run dev
 
 ## GitHub Pagesで公開
 
-このプロジェクトにはGitHub Pages用のWorkflowが含まれています。GitHubリポジトリのSettingsでPagesを開き、Sourceを「GitHub Actions」に設定したあと、`main` ブランチへpushすると自動で公開されます。公開URLは通常 `https://<GitHubユーザー名>.github.io/<リポジトリ名>/` です。
+このプロジェクトにはGitHub Pages用のWorkflow（`.github/workflows/deploy-pages.yml`）が含まれています。
+
+### 初回設定
+
+1. GitHubリポジトリの **Settings** → **Pages** を開きます。
+2. **Build and deployment** の **Source** で **GitHub Actions** を選択します。
+3. リポジトリがPrivateの場合、無料プランではPagesを公開できないことがあるため、必要に応じて **Settings** → **General** → **Danger Zone** → **Change repository visibility** からPublicに変更します。
+
+### デプロイ
+
+変更をGitHubの `main` ブランチへpushすると、自動でデプロイされます。
+
+```powershell
+git add .
+git commit -m "Update market app"
+git push origin main
+```
+
+GitHubの **Actions** → **Deploy to GitHub Pages** を開き、実行結果が緑色のチェックになれば完了です。反映には数分かかる場合があります。
+
+このリポジトリの公開URL:
+
+`https://k4syu.github.io/nazotokimarket/`
 
 ## 使い方
 
