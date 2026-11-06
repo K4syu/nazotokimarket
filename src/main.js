@@ -4,22 +4,56 @@ import { defaultProducts } from './products.js'
 const state = {
   products: defaultProducts,
   sales: JSON.parse(localStorage.getItem('market-sales') || '[]'),
+  stock: { ...Object.fromEntries(defaultProducts.map((product) => [product.id, null])), ...JSON.parse(localStorage.getItem('market-stock') || '{}') },
   cart: {},
   receivedAmount: 0,
   cartOpen: false,
 }
 
 const yen = (value) => `¥${value.toLocaleString('ja-JP')}`
+const formatAmount = (value) => value ? value.toLocaleString('ja-JP') : ''
 const app = document.querySelector('#app')
+
+if ('serviceWorker' in navigator && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'))
+}
 
 function save() {
   localStorage.setItem('market-sales', JSON.stringify(state.sales))
+  localStorage.setItem('market-stock', JSON.stringify(state.stock))
 }
 
 function cartItems() {
   return state.products
     .map((product) => ({ product, quantity: state.cart[product.id] || 0 }))
     .filter((item) => item.quantity > 0)
+}
+
+function hasStock(product, quantity = 1) {
+  const stock = state.stock[product.id]
+  return stock === null || stock >= quantity
+}
+
+function addToCart(id) {
+  const product = state.products.find((item) => item.id === id)
+  const quantity = (state.cart[id] || 0) + 1
+  if (!hasStock(product, quantity)) {
+    showToast(`${product.name}の在庫がありません`)
+    return
+  }
+  state.cart[id] = quantity
+  render()
+}
+
+function renderProduct(product) {
+  const stock = state.stock[product.id]
+  const soldOut = stock !== null && stock <= 0
+  const stockLabel = stock === null ? '在庫設定なし' : soldOut ? '売り切れ' : `残り ${stock} 点`
+  return `<button class="product-card ${product.color} ${soldOut ? 'sold-out' : ''}" data-add="${product.id}" type="button" ${soldOut ? 'disabled' : ''}><img class="product-thumbnail" src="${product.image}" alt="${product.name}"><span class="product-name">${product.name}</span><span class="product-note">${product.note}</span><strong>${yen(product.price)}</strong><span class="product-stock">${stockLabel}</span><span class="add-mark">＋</span></button>`
+}
+
+function renderInventory() {
+  return `<div class="inventory-section"><div class="section-heading compact"><div><p class="eyebrow">INVENTORY</p><h2>在庫管理</h2></div><span>空欄は無制限</span></div><div class="inventory-list">${state.products.map((product) => `<label class="inventory-row"><span>${product.name}</span><input class="stock-input" data-stock-id="${product.id}" type="number" min="0" step="1" inputmode="numeric" placeholder="無制限" value="${state.stock[product.id] ?? ''}"><small>点</small></label>`).join('')}</div></div>`
 }
 
 function render() {
@@ -45,11 +79,11 @@ function render() {
         <section class="products-panel">
           <div class="section-heading"><div><p class="eyebrow">PRODUCTS</p><h2>商品を選ぶ</h2></div><span class="hint">タップでカートに追加</span></div>
           <div class="product-grid">
-            ${state.products.map((product) => `<button class="product-card ${product.color}" data-add="${product.id}" type="button"><img class="product-thumbnail" src="${product.image}" alt="${product.name}"><span class="product-name">${product.name}</span><span class="product-note">${product.note}</span><strong>${yen(product.price)}</strong><span class="add-mark">＋</span></button>`).join('')}
+            ${state.products.map(renderProduct).join('')}
           </div>
           <div class="recent-section"><div class="section-heading compact"><div><p class="eyebrow">RECENT SALES</p><h2>直近の会計</h2></div><span>${state.sales.length}件保存中</span></div>${renderSales(today)}</div>
         </section>
-        <aside class="cart-panel ${state.cartOpen ? 'is-open' : ''}"><div class="cart-heading"><div><p class="eyebrow">CURRENT ORDER</p><h2>今回のお会計</h2></div><div class="cart-heading-actions"><span class="cart-count">${totalQuantity}</span><button class="drawer-close" id="close-cart" type="button" aria-label="会計画面を閉じる">×</button></div></div><div class="cart-list">${renderCart(items)}</div><div class="cart-total"><span>合計</span><strong>${yen(totalPrice)}</strong></div><div class="payment-box"><label for="received-amount">受け取った金額</label><div class="amount-input"><span>¥</span><input id="received-amount" type="number" min="0" step="50" inputmode="none" placeholder="0" value="${state.receivedAmount || ''}" ${items.length ? '' : 'disabled'}></div><div class="keypad" aria-label="受取金額テンキー"><button data-key="7" type="button">7</button><button data-key="8" type="button">8</button><button data-key="9" type="button">9</button><button data-key="backspace" type="button">⌫</button><button data-key="4" type="button">4</button><button data-key="5" type="button">5</button><button data-key="6" type="button">6</button><button data-key="clear" type="button">C</button><button data-key="1" type="button">1</button><button data-key="2" type="button">2</button><button data-key="3" type="button">3</button><button data-key="00" type="button">00</button><button data-key="0" class="zero-key" type="button">0</button></div><div class="change-row"><span>お釣り</span><strong id="change-value">${yen(Math.max(0, state.receivedAmount - totalPrice))}</strong></div><p id="payment-status">${items.length ? (state.receivedAmount < totalPrice ? `あと ${yen(totalPrice - state.receivedAmount)} 必要です` : '会計を確定できます') : '商品を選ぶと入力できます'}</p></div><button class="checkout-button" id="checkout" type="button" ${canCheckout ? '' : 'disabled'}>会計を確定する <span>→</span></button><button class="clear-button" id="clear-cart" type="button" ${items.length ? '' : 'disabled'}>カートを空にする</button></aside>
+        <aside class="cart-panel ${state.cartOpen ? 'is-open' : ''}"><div class="cart-heading"><div><p class="eyebrow">CURRENT ORDER</p><h2>今回のお会計</h2></div><div class="cart-heading-actions"><span class="cart-count">${totalQuantity}</span><button class="drawer-close" id="close-cart" type="button" aria-label="会計画面を閉じる">×</button></div></div><div class="cart-list">${renderCart(items)}</div><div class="cart-total"><span>合計</span><strong>${yen(totalPrice)}</strong></div><div class="payment-box"><label for="received-amount">受け取った金額</label><div class="amount-input"><span>¥</span><input id="received-amount" type="text" inputmode="none" placeholder="0" value="${formatAmount(state.receivedAmount)}" ${items.length ? '' : 'disabled'}></div><div class="keypad" aria-label="受取金額テンキー"><button data-key="7" type="button">7</button><button data-key="8" type="button">8</button><button data-key="9" type="button">9</button><button data-key="backspace" type="button">⌫</button><button data-key="4" type="button">4</button><button data-key="5" type="button">5</button><button data-key="6" type="button">6</button><button data-key="clear" type="button">C</button><button data-key="1" type="button">1</button><button data-key="2" type="button">2</button><button data-key="3" type="button">3</button><button data-key="00" type="button">00</button><button data-key="0" class="zero-key" type="button">0</button></div><div class="change-row"><span>お釣り</span><strong id="change-value">${yen(Math.max(0, state.receivedAmount - totalPrice))}</strong></div><p id="payment-status">${items.length ? (state.receivedAmount < totalPrice ? `あと ${yen(totalPrice - state.receivedAmount)} 必要です` : '会計を確定できます') : '商品を選ぶと入力できます'}</p></div><button class="checkout-button" id="checkout" type="button" ${canCheckout ? '' : 'disabled'}>会計を確定する <span>→</span></button><button class="clear-button" id="clear-cart" type="button" ${items.length ? '' : 'disabled'}>カートを空にする</button></aside>
       </div>
       <details class="summary-drawer">
         <summary>管理用集計を表示</summary>
@@ -59,6 +93,7 @@ function render() {
           <div class="summary-card"><span>販売点数</span><strong>${todaySales.reduce((sum, sale) => sum + sale.quantity, 0)}<small>点</small></strong></div>
           <button class="export-button" id="export-csv" type="button"><span class="button-icon">↓</span>CSVを書き出す</button>
         </div>
+        ${renderInventory()}
       </details>
     </main>
     <footer><span>この端末に自動保存されています</span><button id="clear-history" type="button">履歴を全消去</button></footer>
@@ -106,14 +141,14 @@ function bindEvents() {
   document.querySelector('#open-cart').addEventListener('click', () => { state.cartOpen = true; render() })
   document.querySelector('#close-cart').addEventListener('click', () => { state.cartOpen = false; render() })
   document.querySelector('#drawer-backdrop').addEventListener('click', () => { state.cartOpen = false; render() })
-  document.querySelectorAll('[data-add]').forEach((button) => button.addEventListener('click', () => { const id = button.dataset.add; state.cart[id] = (state.cart[id] || 0) + 1; render() }))
-  document.querySelectorAll('[data-plus]').forEach((button) => button.addEventListener('click', () => { const id = button.dataset.plus; state.cart[id] += 1; render() }))
+  document.querySelectorAll('[data-add]').forEach((button) => button.addEventListener('click', () => addToCart(button.dataset.add)))
+  document.querySelectorAll('[data-plus]').forEach((button) => button.addEventListener('click', () => addToCart(button.dataset.plus)))
   document.querySelectorAll('[data-minus]').forEach((button) => button.addEventListener('click', () => { const id = button.dataset.minus; state.cart[id] -= 1; if (state.cart[id] <= 0) delete state.cart[id]; render() }))
-  document.querySelectorAll('[data-summary-plus]').forEach((button) => button.addEventListener('click', () => { const id = button.dataset.summaryPlus; state.cart[id] = (state.cart[id] || 0) + 1; render() }))
+  document.querySelectorAll('[data-summary-plus]').forEach((button) => button.addEventListener('click', () => addToCart(button.dataset.summaryPlus)))
   document.querySelectorAll('[data-summary-minus]').forEach((button) => button.addEventListener('click', () => { const id = button.dataset.summaryMinus; state.cart[id] -= 1; if (state.cart[id] <= 0) delete state.cart[id]; render() }))
   document.querySelector('#clear-cart').addEventListener('click', () => { state.cart = {}; state.receivedAmount = 0; render() })
   document.querySelector('#received-amount').addEventListener('input', (event) => {
-    state.receivedAmount = Math.max(0, Number(event.target.value) || 0)
+    state.receivedAmount = Math.max(0, Number(event.target.value.replace(/[^0-9]/g, '')) || 0)
     updatePaymentDisplay()
   })
   document.querySelectorAll('[data-key]').forEach((button) => button.addEventListener('click', () => {
@@ -124,10 +159,21 @@ function bindEvents() {
     updatePaymentDisplay()
   }))
   document.querySelector('#export-csv').addEventListener('click', exportCsv)
+  document.querySelectorAll('.stock-input').forEach((input) => input.addEventListener('change', (event) => {
+    const value = event.target.value.trim()
+    state.stock[event.target.dataset.stockId] = value === '' ? null : Math.max(0, Number(value) || 0)
+    save()
+    render()
+  }))
   document.querySelector('#checkout').addEventListener('click', () => {
     const items = cartItems()
     if (!items.length) return
+    if (items.some(({ product, quantity }) => !hasStock(product, quantity))) {
+      showToast('在庫数を確認してください')
+      return
+    }
     state.sales.unshift({ time: new Date().toISOString(), quantity: items.reduce((sum, item) => sum + item.quantity, 0), total: items.reduce((sum, item) => sum + item.product.price * item.quantity, 0), items: items.map(({ product, quantity }) => ({ name: product.name, quantity, price: product.price })) })
+    items.forEach(({ product, quantity }) => { if (state.stock[product.id] !== null) state.stock[product.id] -= quantity })
     state.cart = {}
     state.receivedAmount = 0
     state.cartOpen = false
@@ -143,7 +189,7 @@ function updatePaymentDisplay() {
   const totalPrice = items.reduce((sum, item) => sum + item.product.price * item.quantity, 0)
   const input = document.querySelector('#received-amount')
   const change = Math.max(0, state.receivedAmount - totalPrice)
-  input.value = state.receivedAmount || ''
+  input.value = formatAmount(state.receivedAmount)
   document.querySelector('#change-value').textContent = yen(change)
   document.querySelector('#payment-status').textContent = state.receivedAmount < totalPrice ? `あと ${yen(totalPrice - state.receivedAmount)} 必要です` : '会計を確定できます'
   document.querySelector('#checkout').disabled = !items.length || state.receivedAmount < totalPrice

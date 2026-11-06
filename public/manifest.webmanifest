@@ -1,0 +1,17 @@
+{
+  "name": "謎解きマーケット 2026 レジ",
+  "short_name": "謎解きレジ",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4efe6",
+  "theme_color": "#183c50",
+  "icons": [
+    {
+      "src": "./favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
