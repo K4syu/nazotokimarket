@@ -49,7 +49,7 @@ function renderProduct(product) {
   const stock = state.stock[product.id]
   const soldOut = stock !== null && stock <= 0
   const stockLabel = stock === null ? '在庫設定なし' : soldOut ? '売り切れ' : `残り ${stock} 点`
-  return `<button class="product-card ${product.color} ${soldOut ? 'sold-out' : ''}" data-add="${product.id}" type="button" ${soldOut ? 'disabled' : ''}><img class="product-thumbnail" src="${product.image}" alt="${product.name}"><span class="product-name">${product.name}</span><span class="product-note">${product.note}</span><strong>${yen(product.price)}</strong><span class="product-stock">${stockLabel}</span><span class="add-mark">＋</span></button>`
+  return `<button class="product-card ${product.color} ${soldOut ? 'sold-out' : ''}" data-add="${product.id}" type="button" ${soldOut ? 'disabled' : ''}><span class="product-name">${product.name}</span><span class="product-note">${product.note}</span><strong>${yen(product.price)}</strong><span class="product-stock">${stockLabel}</span><span class="add-mark">＋</span></button>`
 }
 
 function renderInventory() {
